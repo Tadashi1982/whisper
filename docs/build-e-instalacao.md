@@ -2,16 +2,16 @@
 
 Documentação do processo para empacotar o WhisperWriter num executável standalone (sem precisar de `python run.py`) e instalá-lo no sistema seguindo os padrões XDG.
 
-Este documento cobre o fluxo em **Linux x86_64 com GPU NVIDIA** (testado em Ubuntu 24.04 + RTX 4070 + driver 580). Para CPU-only ou Windows, há observações no final.
+Este documento cobre o fluxo em **Linux x86_64 com GPU NVIDIA** (testado em Ubuntu 24.04 + RTX 4070 + driver 580, sessões X11 e Wayland/GNOME 46). Para CPU-only ou Windows, há observações no final.
 
 ---
 
 ## Pré-requisitos do sistema
 
-Pacotes apt necessários no host de desenvolvimento (precisa de `sudo` apenas uma vez):
+Pacotes apt comuns às duas sessões:
 
 ```bash
-sudo apt install -y python3.12-dev pkg-config libportaudio2 xdotool
+sudo apt install -y python3.12-dev pkg-config libportaudio2
 ```
 
 | Pacote | Para quê |
@@ -19,7 +19,73 @@ sudo apt install -y python3.12-dev pkg-config libportaudio2 xdotool
 | `python3.12-dev` | Header `Python.h` para compilar `evdev` e `webrtcvad-wheels` durante o `pip install` |
 | `pkg-config` | Localização de bibliotecas em build |
 | `libportaudio2` | Biblioteca runtime que o `sounddevice` usa para gravar áudio |
-| `xdotool` | Simulação de digitação real no X11 (mais robusto que `pynput.type` em terminais) |
+
+### X11
+
+```bash
+sudo apt install -y xdotool
+```
+
+`xdotool` é usado pelo `input_method: xdotool` (recomendado em X11) — simulação de digitação via XTest, mais robusta que `pynput` em terminais.
+
+### Wayland (GNOME/mutter)
+
+```bash
+sudo apt install -y ydotool ydotoold wl-clipboard
+sudo usermod -aG input $USER   # depois faça LOGOUT + LOGIN
+```
+
+| Pacote / passo | Para quê |
+|---|---|
+| `ydotool` | CLI que envia keystrokes via `/dev/uinput`. Usado pelo `input_method: ydotool` (char-a-char) e pelo `input_method: clipboard` (envia 1 Ctrl+V) |
+| `ydotoold` | Daemon do ydotool (pacote separado!) — sem ele, `ydotool` reabre `/dev/uinput` por chamada e fica instável em alta velocidade |
+| `wl-clipboard` | Provê `wl-copy`/`wl-paste`. Usado pelo `input_method: clipboard` em Wayland |
+| Grupo `input` | Necessário para o `EvdevBackend` ler `/dev/input/event*` (captura da hotkey global em Wayland). Requer relogar pra ser aplicado |
+
+`/dev/uinput` precisa estar acessível pelo seu user — geralmente já vem via ACL do systemd-logind em sessões desktop modernas (`getfacl /dev/uinput` mostrar `user:<seu_user>:rw-`). Caso não esteja, instale uma udev rule.
+
+#### Habilitar `ydotoold` como user systemd service
+
+O daemon precisa rodar no contexto do seu login (não system-wide) para o socket ficar exclusivo da sessão:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/ydotoold.service <<'EOF'
+[Unit]
+Description=ydotool input daemon (user)
+Documentation=https://github.com/ReimuNotMoe/ydotool
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ydotoold
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable --now ydotoold.service
+systemctl --user status ydotoold.service   # confirme "active (running)" + "listening on socket /tmp/.ydotool_socket"
+```
+
+#### Configuração recomendada do app em Wayland
+
+Após o setup acima, ajuste `~/.config/WhisperWriter/config.yaml`:
+
+```yaml
+recording_options:
+  input_backend: evdev
+  recording_mode: hold_to_record   # opcional — segura F9 enquanto fala, solta pra transcrever
+post_processing:
+  input_method: clipboard
+  paste_uses_shift_v: false        # alterne via tray menu ou hotkey ctrl+alt+v
+```
+
+**Por que `clipboard` e não `ydotool` em Wayland?** O ydotool 0.1.8 do Ubuntu 24.04 (versão antiga) corrompe keystrokes em rate alto (`writing_key_press_delay < 50ms`) mesmo com daemon. O `clipboard` envia o texto via `wl-copy` e dispara **um único** `Ctrl+V` via ydotool — atômico, sem perda de char, sem janela de "perda de foco no meio". Para terminais Wayland (gnome-terminal, tilix, alacritty, kitty) que usam `Ctrl+Shift+V`, alterne via item "Modo terminal" no tray menu ou hotkey global `Ctrl+Alt+V`.
+
+### Driver NVIDIA
 
 Driver NVIDIA já instalado (verifique com `nvidia-smi`). **Não é necessário instalar o CUDA Toolkit do sistema** — usamos os pacotes pip `nvidia-cublas-cu12` e `nvidia-cudnn-cu12` que carregam as libs CUDA dentro do venv.
 
@@ -243,6 +309,10 @@ O `webrtcvad` (v2.0.11) ainda usa `pkg_resources`, que foi removido do core do `
 - **Tray icon → Exit**: cleanup graceful (para `result_thread`, `key_listener`, `input_simulator`) via `QApplication.aboutToQuit`
 - **Ctrl+C** no terminal: mata o processo direto via `SIG_DFL`. Threads filhas e descritores de áudio são liberados pelo OS — sem vazamento prático mas sem cleanup graceful
 
+### Single instance
+
+O app garante uma única instância por user via `fcntl.flock` em `$XDG_RUNTIME_DIR/whisperwriter.lock`. Se você tentar abrir uma segunda vez (terminal ou ícone do menu), aparece uma notificação do desktop ("WhisperWriter já está rodando") e o processo novo sai com exit 0 sem quebrar a primeira instância. O lock é liberado automaticamente pelo kernel quando o processo morre — sem lock fantasma após crash.
+
 ### CPU-only build
 
 Se quiser empacotar sem GPU (~400 MB em vez de ~3 GB):
@@ -261,6 +331,8 @@ Se quiser empacotar sem GPU (~400 MB em vez de ~3 GB):
 
 PyInstaller não faz cross-compile. Para gerar `WhisperWriter.exe` é necessário rodar todo o setup em Windows. Mudanças mínimas necessárias:
 
-- Trocar `input_method: xdotool` por `input_method: pynput` no `config.yaml` (no Windows, `pynput` funciona bem)
+- Trocar `input_method` para `pynput` ou `clipboard` no `config.yaml` (no Windows ambos funcionam — `clipboard` usa pyperclip nativo + pynput para Ctrl+V)
+- Os passos Wayland (ydotool, ydotoold, wl-clipboard, grupo input) **não se aplicam** em Windows
+- O lock single-instance funciona via `fcntl` em Unix; em Windows precisaria adaptar para `msvcrt.locking` ou `QLockFile` do Qt
 - O patch do `LD_LIBRARY_PATH` em `activate` é Linux-only e não tem efeito (Windows usa `PATH` e os pacotes `nvidia-*` carregam DLLs automaticamente)
 - Pacotes apt (`python3.12-dev`, `libportaudio2`, `xdotool`) são desnecessários — no Windows essas dependências vêm com os respectivos pacotes pip ou com o instalador do Python

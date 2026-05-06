@@ -280,10 +280,13 @@ class KeyListener(QObject):
     Exposes ``activated`` and ``deactivated`` as Qt signals so listeners
     receive callbacks on the main Qt thread (via ``QueuedConnection``)
     even though the input backend dispatches from a worker thread.
+    Também emite ``terminal_toggle_pressed`` (edge-triggered, no PRESS)
+    para uma hotkey secundária configurável.
     """
 
     activated = Signal()
     deactivated = Signal()
+    terminal_toggle_pressed = Signal()
 
     def __init__(self):
         """Initialize the KeyListener with backends and activation keys."""
@@ -291,7 +294,9 @@ class KeyListener(QObject):
         self.backends = []
         self.active_backend = None
         self.key_chord = None
+        self.toggle_chord = None
         self.load_activation_keys()
+        self.load_toggle_keys()
         self.initialize_backends()
         self.select_backend_from_config()
 
@@ -363,6 +368,15 @@ class KeyListener(QObject):
         keys = self.parse_key_combination(key_combination)
         self.set_activation_keys(keys)
 
+    def load_toggle_keys(self):
+        """Carrega o chord opcional de alternância do paste mode."""
+        combo = ConfigManager.get_config_value('recording_options', 'terminal_toggle_key')
+        if not combo:
+            self.toggle_chord = None
+            return
+        keys = self.parse_key_combination(combo)
+        self.toggle_chord = KeyChord(keys) if keys else None
+
     def parse_key_combination(self, combination_string: str) -> set[KeyCode | frozenset[KeyCode]]:
         """Parse a string representation of key combination into a set of KeyCodes."""
         keys = set()
@@ -391,18 +405,26 @@ class KeyListener(QObject):
 
     def on_input_event(self, event):
         """Handle input events and trigger callbacks if the key chord becomes active or inactive."""
-        if not self.key_chord or not self.active_backend:
+        if not self.active_backend:
             return
 
         key, event_type = event
 
-        was_active = self.key_chord.is_active()
-        is_active = self.key_chord.update(key, event_type)
+        if self.key_chord:
+            was_active = self.key_chord.is_active()
+            is_active = self.key_chord.update(key, event_type)
 
-        if not was_active and is_active:
-            self.activated.emit()
-        elif was_active and not is_active:
-            self.deactivated.emit()
+            if not was_active and is_active:
+                self.activated.emit()
+            elif was_active and not is_active:
+                self.deactivated.emit()
+
+        if self.toggle_chord:
+            was_active = self.toggle_chord.is_active()
+            is_active = self.toggle_chord.update(key, event_type)
+            # edge-triggered: dispara uma vez quando o combo fica ativo.
+            if not was_active and is_active:
+                self.terminal_toggle_pressed.emit()
 
     def add_callback(self, event: str, callback: Callable):
         """Connect a callback to the corresponding Qt signal.
@@ -419,6 +441,7 @@ class KeyListener(QObject):
     def update_activation_keys(self):
         """Update activation keys from the current configuration."""
         self.load_activation_keys()
+        self.load_toggle_keys()
 
 class EvdevBackend(InputBackend):
     """
@@ -448,29 +471,40 @@ class EvdevBackend(InputBackend):
         self.stop_event = None
 
     def start(self):
-        """Start the evdev backend."""
+        """Start the evdev backend.
+
+        Não instala signal handlers próprios: ``main.py`` mantém
+        SIGINT/SIGTERM em ``SIG_DFL`` (Ctrl+C mata o processo via kernel),
+        e cleanup acontece pelo ``QApplication.aboutToQuit`` que chama
+        ``KeyListener.stop`` → ``EvdevBackend.stop``. Sobrescrever isso
+        com signal.signal() Python congela o app — handlers só rodam
+        entre instruções Python e Qt event loop fica preso em select() C.
+
+        Filtra devices virtuais criados por ferramentas de injeção
+        (``ydotoold``, ``dotool``): ler suas próprias keystrokes injetadas
+        cria backpressure de eventos que corrompe/perde caracteres durante
+        a digitação. O nome é o filtro estável (paths /dev/input/event*
+        renumeram entre boots).
+        """
         import threading
 
         import evdev
         self.evdev = evdev
         self.key_map = self._create_key_map()
 
-        # Initialize input devices
-        self.devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        self.devices = []
+        for path in evdev.list_devices():
+            try:
+                dev = evdev.InputDevice(path)
+            except OSError:
+                continue
+            name = (dev.name or '').lower()
+            if 'ydotoold' in name or 'dotool' in name:
+                dev.close()
+                continue
+            self.devices.append(dev)
         self.stop_event = threading.Event()
-        self._setup_signal_handler()
         self._start_listening()
-
-    def _setup_signal_handler(self):
-        """Set up signal handlers for graceful shutdown."""
-        import signal
-
-        def signal_handler(signum, frame):
-            print("Received termination signal. Stopping evdev backend...")
-            self.stop()
-
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
 
     def stop(self):
         """Stop the evdev backend and clean up resources."""

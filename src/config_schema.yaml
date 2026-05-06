@@ -91,6 +91,10 @@ recording_options:
     value: ctrl+shift+space
     type: str
     description: "The keyboard shortcut to activate the recording and transcribing process. Separate keys with a '+'."
+  terminal_toggle_key:
+    value: ctrl+alt+v
+    type: str
+    description: "Hotkey global para alternar o paste shortcut entre Ctrl+V (editores) e Ctrl+Shift+V (terminais Wayland). Aplica-se apenas com input_method=clipboard. Deixe vazio para desabilitar. Evite F-keys em laptops (Fn-lock pode interceptar)."
   input_backend:
     value: auto
     type: str
@@ -146,11 +150,17 @@ post_processing:
   input_method:
     value: pynput
     type: str
-    description: "The method to use for simulating keyboard input."
+    description: "Como inserir o texto transcrito. 'clipboard' é o mais robusto em Wayland (1 paste atômico via wl-copy + ydotool key). 'ydotool' digita char-a-char (sujeito a perdas em rate alto). 'pynput'/'xdotool' funcionam em X11."
     options:
       - pynput
+      - xdotool
+      - clipboard
       - ydotool
       - dotool
+  paste_uses_shift_v:
+    value: false
+    type: bool
+    description: "Se input_method='clipboard', usa Ctrl+Shift+V em vez de Ctrl+V. Necessário em terminais (gnome-terminal, alacritty, kitty) que não aceitam Ctrl+V."
 
 # Miscellaneous settings
 misc:

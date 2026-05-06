@@ -26,7 +26,17 @@ class StatusWindow(BaseWindow):
         """
         Initialize the status user interface.
         """
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        # WindowDoesNotAcceptFocus + WA_ShowWithoutActivating impede que a
+        # janela roube foco ao aparecer — crítico em Wayland, onde o
+        # compositor (mutter) ativa janelas top-level por padrão e o
+        # ydotool acaba digitando aqui em vez do app sob foco anterior.
+        self.setWindowFlags(
+            Qt.FramelessWindowHint
+            | Qt.WindowStaysOnTopHint
+            | Qt.Tool
+            | Qt.WindowDoesNotAcceptFocus
+        )
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
 
         status_layout = QHBoxLayout()
         status_layout.setContentsMargins(0, 0, 0, 0)

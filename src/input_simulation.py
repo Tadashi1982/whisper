@@ -11,20 +11,6 @@ from PySide6.QtCore import QObject, QThread, Signal
 from utils import ConfigManager
 
 
-def run_command_or_exit_on_failure(command):
-    """
-    Run a shell command and exit if it fails.
-
-    Args:
-        command (list): The command to run as a list of strings.
-    """
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error running command: {e}")
-        exit(1)
-
-
 class _TypingWorker(QThread):
     """Background QThread that runs the actual blocking typewrite call.
 
@@ -60,6 +46,10 @@ class InputSimulator(QObject):
         self.input_method = ConfigManager.get_config_value('post_processing', 'input_method')
         self.dotool_process = None
         self._worker = None
+        # Runtime flag — alternável via tray menu. Inicializa do config.
+        self.paste_uses_shift_v = ConfigManager.get_config_value(
+            'post_processing', 'paste_uses_shift_v'
+        )
 
         if self.input_method == 'pynput':
             self.keyboard = PynputController()
@@ -133,6 +123,82 @@ class InputSimulator(QObject):
         )
 
     def _typewrite_clipboard(self, text):
+        """Insere texto via clipboard + paste shortcut.
+
+        Robusto em Wayland: o ydotool envia 1 keystroke combo (Ctrl+V),
+        evitando o problema de perdas em digitação char-a-char.
+        Em X11 mantém o caminho legado (pyperclip + pynput).
+
+        ``self.paste_uses_shift_v`` é runtime (alternável pelo tray menu),
+        então cada chamada lê o estado atual.
+        """
+        session = os.environ.get('XDG_SESSION_TYPE', '').lower()
+        use_shift = self.paste_uses_shift_v
+        if session == 'wayland':
+            self._clipboard_paste_wayland(text, use_shift)
+        else:
+            self._clipboard_paste_x11(text, use_shift)
+
+    def _clipboard_paste_wayland(self, text, use_shift):
+        """wl-copy → ydotool key ctrl+v → restaura clipboard."""
+        previous = None
+        try:
+            r = subprocess.run(
+                ['wl-paste', '--no-newline'],
+                capture_output=True, text=True, check=False, timeout=1.0,
+            )
+            if r.returncode == 0:
+                previous = r.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        try:
+            r = subprocess.run(
+                ['wl-copy'], input=text, text=True, check=False, timeout=2.0,
+            )
+        except FileNotFoundError:
+            print('[input] wl-copy não encontrado — instale wl-clipboard.')
+            return
+        except subprocess.TimeoutExpired:
+            print('[input] wl-copy timeout.')
+            return
+        if r.returncode != 0:
+            print(f'[input] wl-copy falhou (rc={r.returncode})')
+            return
+
+        # Pequeno delay pra clipboard manager registrar o conteúdo novo.
+        time.sleep(0.05)
+
+        combo = 'ctrl+shift+v' if use_shift else 'ctrl+v'
+        try:
+            r = subprocess.run(
+                ['ydotool', 'key', combo],
+                capture_output=True, text=True, check=False, timeout=2.0,
+            )
+        except FileNotFoundError:
+            print('[input] ydotool não encontrado no PATH.')
+            return
+        except subprocess.TimeoutExpired:
+            print('[input] ydotool key timeout.')
+            return
+        if r.returncode != 0:
+            stderr = (r.stderr or '').strip()
+            print(f'[input] ydotool key {combo} falhou (rc={r.returncode}): {stderr}')
+
+        # Janela curta pra app consumir o paste antes de restaurar clipboard.
+        time.sleep(0.15)
+
+        if previous is not None:
+            try:
+                subprocess.run(
+                    ['wl-copy'], input=previous, text=True,
+                    check=False, timeout=2.0,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+    def _clipboard_paste_x11(self, text, use_shift):
+        """pyperclip (xclip/xsel) + pynput Ctrl+V (caminho legado)."""
         previous = ""
         try:
             previous = pyperclip.paste()
@@ -143,11 +209,15 @@ class InputSimulator(QObject):
         time.sleep(0.15)
 
         self.keyboard.press(PynputKey.ctrl)
+        if use_shift:
+            self.keyboard.press(PynputKey.shift)
         time.sleep(0.03)
         self.keyboard.press('v')
         time.sleep(0.03)
         self.keyboard.release('v')
         time.sleep(0.03)
+        if use_shift:
+            self.keyboard.release(PynputKey.shift)
         self.keyboard.release(PynputKey.ctrl)
 
         time.sleep(0.25)
@@ -171,22 +241,30 @@ class InputSimulator(QObject):
             time.sleep(interval)
 
     def _typewrite_ydotool(self, text, interval):
-        """
-        Simulate typing using ydotool.
+        """Simulate typing using ydotool.
 
-        Args:
-            text (str): The text to type.
-            interval (float): The interval between keystrokes in seconds.
+        Em Wayland, requer ``ydotoold`` rodando + acesso a ``/dev/uinput``
+        (usuário no grupo ``input`` ou udev rule). Falha de IPC apenas loga
+        e retorna — não derruba o app.
         """
-        cmd = "ydotool"
-        run_command_or_exit_on_failure([
-            cmd,
-            "type",
-            "--key-delay",
-            str(interval * 1000),
-            "--",
-            text,
-        ])
+        try:
+            delay_ms = max(1, int(float(interval) * 1000))
+        except (TypeError, ValueError):
+            delay_ms = 12
+        safe_text = text.replace('\x00', '')
+        try:
+            result = subprocess.run(
+                ['ydotool', 'type', '--key-delay', str(delay_ms), '--', safe_text],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            print('[input] ydotool não encontrado no PATH — instale o pacote ydotool.')
+            return
+        if result.returncode != 0:
+            stderr = (result.stderr or '').strip()
+            print(f'[input] ydotool falhou (rc={result.returncode}): {stderr}')
 
     def _typewrite_dotool(self, text, interval):
         """

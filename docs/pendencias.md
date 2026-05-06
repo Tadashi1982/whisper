@@ -33,19 +33,19 @@ Itens identificados em `docs/revisao-e-melhorias.md` (mai/2026) que **não** for
 
 ---
 
-## 3. Backend Wayland (`PortalBackend`) — Fase 6 #20
+## 3. Backend Wayland — Fase 6 #20 — **RESOLVIDO POR CAMINHO ALTERNATIVO**
 
-**Item:** Implementar backend `xdg-desktop-portal` GlobalShortcuts em `key_listener.py` para captura de hotkey global em sessões Wayland.
+**Plano original:** implementar `PortalBackend` via `xdg-desktop-portal GlobalShortcuts` (D-Bus async).
 
-**Por que pulei:** este projeto roda em **X11** (`XDG_SESSION_TYPE=x11`). Implementar Wayland sem ter uma sessão Wayland pra testar é entregar código "que provavelmente funciona" — fluxo D-Bus assíncrono complexo (RequestSession → BindShortcuts → Activated signal) que pode quebrar de formas sutis sem smoke real.
+**O que foi feito (mai/2026):** ao tentar implementar, descobri que o **GNOME 46 (Ubuntu 24.04 default) NÃO expõe o portal `GlobalShortcuts`** — só apareceu no GNOME 48. Em vez de esperar pelo upgrade do compositor, usei o **`EvdevBackend` que já existia** no código: lê `/dev/input/event*` direto do kernel, abaixo do display server, então funciona igual em X11 e Wayland sem depender de portal nenhum.
 
-**Mitigação atual:** `src/session.py:enforce_session_compatibility()` (Fase 6 #22) detecta sessão Wayland no startup e emite warning explícito sobre o que vai quebrar (hotkey + typing). Em vez de falhar silenciosamente, o usuário sabe imediatamente.
+Setup necessário (documentado em `docs/build-e-instalacao.md`):
+- `sudo apt install ydotool ydotoold wl-clipboard`
+- `sudo usermod -aG input $USER` + relogar
+- user systemd service do `ydotoold`
+- `EvdevBackend.start()` filtra devices virtuais do `ydotoold`/`dotool` para evitar feedback loop
 
-**Quando reativar:**
-- Quando migrar para Ubuntu Wayland-default (Ubuntu 25.04+ usa GNOME 48 que tem GlobalShortcuts portal)
-- Se distribuir o app para outros usuários e algum reportar Wayland
-
-**Escopo estimado:** 2-3 dias. Adicionar dependência `dbus-next` (ou usar `qtdbus` que já vem com Qt6); implementar `PortalBackend(InputBackend)` com handshake D-Bus async; expor `pyqtSignal` ao detectar shortcut. Testar pelo menos em GNOME e KDE.
+**Quando o `PortalBackend` ainda faria sentido:** distribuição em sandbox Flatpak (que bloqueia `/dev/input/event*`), ou se o usuário não quiser/puder entrar no grupo `input`. Em GNOME 48+ vale a pena implementar como caminho "blessed" pelo padrão Wayland — fica como tarefa futura opcional.
 
 **Referências úteis:**
 - [xdg-desktop-portal GlobalShortcuts spec](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.GlobalShortcuts.html)
@@ -53,19 +53,14 @@ Itens identificados em `docs/revisao-e-melhorias.md` (mai/2026) que **não** for
 
 ---
 
-## 4. Method `ydotool` testado — Fase 6 #21
+## 4. Method `ydotool` testado — Fase 6 #21 — **RESOLVIDO**
 
-**Item:** Validar de fato o `input_method: ydotool` em `input_simulation.py`.
+**Status (mai/2026):** `_typewrite_ydotool` validado em sessão Wayland real. Confirmado funcionando com:
+- `ydotool 0.1.8-3build1` + `ydotoold 0.1.8-3build1` (Ubuntu 24.04 universe)
+- `ydotoold` rodando como user systemd service em `/tmp/.ydotool_socket`
+- `/dev/uinput` acessível via ACL do systemd-logind (não precisa udev rule)
 
-**Por que pulei:** `ydotool` requer `ydotoold` daemon rodando + permissão em `/dev/uinput` (típicamente requer adicionar usuário ao grupo `input` ou ajustar udev). Configurar tudo isso em X11 só para testar é trabalho desproporcional ao benefício imediato (X11 já funciona com `xdotool`).
-
-**Mitigação atual:** o código `_typewrite_ydotool` existe em `input_simulation.py` mas é considerado não-validado. `enforce_session_compatibility` warns se você setar `ydotool` em X11.
-
-**Quando reativar:**
-- Junto com a migração Wayland (item 3) — `ydotool` é uma das opções de digitação em Wayland
-- Se algum usuário pedir suporte oficial
-
-**Escopo estimado:** 0.5-1 dia (assumindo que `ydotool` em si funciona). Inclui: setup de daemon + udev rule no host de testes, gravação de logs, validação de caracteres especiais (acentos, símbolos), validação de delay timing.
+**Limitação descoberta:** o `ydotool 0.1.8` perde caracteres em rate alto (`writing_key_press_delay < 50ms`) **mesmo com daemon**. É bug do upstream 0.1.x; resolvido em 1.x. Por isso passamos a recomendar `input_method=clipboard` em Wayland (1 paste atômico em vez de N keystrokes — ver pendência nova #8 abaixo). `ydotool` continua disponível como fallback.
 
 ---
 
@@ -108,6 +103,38 @@ O bundle `dist/WhisperWriter/` tem 3 GB; deste total ~700 MB são `nvidia-cudnn-
 
 ---
 
+## 8. Compilar `ydotool 1.x` do source — performance Wayland
+
+**Item:** Substituir o `ydotool 0.1.8-3build1` (Ubuntu universe, antiga e abandonada) pela versão upstream 1.x.
+
+**Por que pode importar:** o 0.1.x perde caracteres em `--key-delay < 50ms` mesmo com daemon (limitação reconhecida do upstream antigo). Hoje contornamos com `input_method=clipboard` (1 paste atômico, sem o problema). Mas se quisermos voltar a usar `input_method=ydotool` char-a-char com performance real (delay 5-10ms) — útil em casos onde paste não rola (apps que filtram clipboard, formulários com handlers JS pesados) — precisaríamos do 1.x.
+
+**Quando reativar:**
+- Se algum app importante recusar paste e precisarmos de char-a-char rápido
+- Se quisermos eliminar a dependência de `wl-clipboard` no fluxo principal
+- Se outros usuários reportarem casos de uso onde clipboard não serve
+
+**Escopo estimado:** 2-4h. Inclui: `git clone https://github.com/ReimuNotMoe/ydotool.git`, `cmake -B build`, `make -j`, `sudo make install`; ajustar systemd user service (mesmo `/usr/local/bin/ydotoold`); validar que `--key-delay 5` funciona limpo; documentar que o pacote apt não pode ser usado em paralelo.
+
+---
+
+## 9. Indicador da janela ativa em Wayland (auto-toggle do modo terminal)
+
+**Item:** Detectar automaticamente se a janela em foco é um terminal e escolher Ctrl+V vs Ctrl+Shift+V sozinho, eliminando a necessidade de toggle manual via tray menu / hotkey `Ctrl+Alt+V`.
+
+**Por que pulei:** o GNOME 46 bloqueia `org.gnome.Shell.Introspect.GetWindows` por segurança (testado: `AccessDenied`). Sem extension custom não há API estável. Alternativas:
+- GNOME Shell extension custom expõe método D-Bus que retorna `wm_class` da janela ativa
+- Heurística por tamanho do texto (curto = código = terminal) — frágil
+- Lista hardcoded de wm_class de terminais — funciona se o usuário aceitar instalar a extension
+
+**Mitigação atual:** toggle manual via tray menu "Modo terminal" + hotkey `Ctrl+Alt+V` + indicador visual no ícone do tray (badge `>_` quando em modo terminal). UX adequada — usuário alterna ao trocar contexto, vê confirmação imediata.
+
+**Quando reativar:** se uso real mostrar que o toggle manual incomoda demais.
+
+**Escopo estimado:** 1-2 dias. Escrever GNOME extension mínima (~50 linhas GJS), publicar no repo do app, documentar instalação.
+
+---
+
 ## Itens já feitos durante a sessão (referência)
 
 Lista resumida do que foi implementado, por commit:
@@ -121,3 +148,4 @@ Lista resumida do que foi implementado, por commit:
 | `0e2c533` | 7 | Migração PyQt5 → PySide6 |
 | `d6e0a22` | (fix) | `_TypingWorker already deleted` regressão PySide6 |
 | `0d9d2ce` | (fix) | Ctrl+C trava — SIG_DFL + cleanup via aboutToQuit |
+| (próximo) | Wayland | Suporte completo Wayland: evdev + ydotool/clipboard, status window suprimida, filtro de devices virtuais do ydotoold, fix Ctrl+C com EvdevBackend (signal handler removido), tray icon dinâmico com badge `>_`, toggle Ctrl+V↔Ctrl+Shift+V via tray menu + hotkey Ctrl+Alt+V, single instance lock via fcntl, recommendation `recording_mode=hold_to_record` |
