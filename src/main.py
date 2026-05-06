@@ -1,4 +1,5 @@
 import os
+import signal
 import sys
 
 import sounddevice as sd
@@ -106,21 +107,19 @@ class WhisperWriterApp(QObject):
         self.tray_icon.show()
 
     def cleanup(self):
+        if self.result_thread and self.result_thread.isRunning():
+            self.result_thread.stop()
         if self.key_listener:
             self.key_listener.stop()
         if self.input_simulator:
             self.input_simulator.cleanup()
 
     def exit_app(self):
-        """
-        Exit the application.
-        """
-        self.cleanup()
+        """Quit the Qt event loop. Cleanup runs via app.aboutToQuit."""
         QApplication.quit()
 
     def restart_app(self):
         """Restart the application to apply the new settings."""
-        self.cleanup()
         QApplication.quit()
         QProcess.startDetached(sys.executable, sys.argv)
 
@@ -204,7 +203,19 @@ class WhisperWriterApp(QObject):
     def run(self):
         """
         Start the application.
+
+        Restaura SIG_DFL para SIGINT/SIGTERM: o sinal mata o processo via
+        kernel default. Tentar tratar via signal.signal + Python handler
+        em Qt event loop é um conhecido buraco — ``app.exec()`` fica preso
+        em select() do C, e Python signal handlers só rodam entre
+        operações Python. Resultado: Ctrl+C trava.
+
+        Cleanup graceful acontece via QApplication.aboutToQuit (acionado
+        quando o usuário fecha pelo tray menu "Exit" → exit_app → quit).
         """
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        self.app.aboutToQuit.connect(self.cleanup)
         sys.exit(self.app.exec())
 
 
