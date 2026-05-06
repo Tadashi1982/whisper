@@ -90,13 +90,22 @@ class InputSimulator(QObject):
 
         Returns immediately; emits ``finished`` when the typing completes.
         """
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.wait()
+        prev = self._worker
+        if prev is not None:
+            try:
+                if prev.isRunning():
+                    prev.wait()
+            except RuntimeError:
+                pass
         worker = _TypingWorker(self, text)
         worker.finished.connect(self.finished.emit)
-        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(self._clear_worker)
         self._worker = worker
         worker.start()
+
+    def _clear_worker(self):
+        """Drop reference to the finished worker so Python can collect it."""
+        self._worker = None
 
     def _typewrite_sync(self, text):
         """Run the configured typing backend on the calling thread (blocking)."""
