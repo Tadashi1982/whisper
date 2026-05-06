@@ -6,6 +6,30 @@
     <img src="./assets/ww-demo-image-02.gif" alt="WhisperWriter demo gif" width="340" height="136">
 </p>
 
+## Origem e atribuição
+
+Este repositório é um **fork customizado de [savbell/whisper-writer](https://github.com/savbell/whisper-writer)**, ajustado para **Linux x86_64 + Python 3.12 + GPU NVIDIA** com suporte funcional a **Wayland (GNOME/mutter)**. Mantém a licença original [GPL-3.0](LICENSE).
+
+**Diferenças principais vs upstream:**
+- Empacotamento PyInstaller standalone (~3 GB com libs CUDA bundled) + script `install.sh` para `~/.local/share/`
+- Stack atualizada: cuDNN 9, ctranslate2 ≥ 4.5, faster-whisper ≥ 1.2, modelo `large-v3-turbo`, PySide6 (Qt6, LGPL)
+- Suporte funcional **Wayland**: backend `evdev` + input via `wl-clipboard` + `ydotool`/`ydotoold` (paste atômico via clipboard, sem perda de char/foco)
+- Toggle Ctrl+V ↔ Ctrl+Shift+V (editor vs terminal) via tray menu / hotkey global, com indicador visual no ícone do tray
+- Single-instance lock via `fcntl.flock`, validação de schema da config, typewrite assíncrono, fix de Ctrl+C
+- Documentação extensa em português brasileiro: [`CLAUDE.md`](CLAUDE.md), [`docs/build-e-instalacao.md`](docs/build-e-instalacao.md), [`docs/pendencias.md`](docs/pendencias.md)
+
+**Créditos:**
+- **WhisperWriter original**: [savbell/whisper-writer](https://github.com/savbell/whisper-writer) — base do código (UI PyQt → migrada pra PySide6, fluxo de gravação/transcrição, schema de config, assets em `assets/`)
+- **Modelo Whisper**: [OpenAI](https://openai.com/research/whisper) (MIT)
+- **faster-whisper**: [SYSTRAN](https://github.com/SYSTRAN/faster-whisper) (MIT)
+- **ctranslate2**: [OpenNMT](https://github.com/OpenNMT/CTranslate2) (MIT)
+- **PySide6**: [The Qt Company](https://www.qt.io/qt-for-python) (LGPL-3.0)
+- **ydotool / ydotoold**: [ReimuNotMoe](https://github.com/ReimuNotMoe/ydotool) (AGPL-3.0; usado como subprocess externo, não linkado)
+
+**Issues:** este fork **não está aceitando contribuições externas** ativamente — é uso pessoal. Bugs e dúvidas relativos ao código upstream original devem ir para [savbell/whisper-writer/issues](https://github.com/savbell/whisper-writer/issues). O que segue do README abaixo (em inglês) é o conteúdo herdado do upstream e cobre o uso geral; para o setup específico deste fork (Wayland, build PyInstaller, dependências) consulte [`docs/build-e-instalacao.md`](docs/build-e-instalacao.md).
+
+---
+
 **Update (2024-05-28):** I've just merged in a major rewrite of WhisperWriter! We've migrated from using `tkinter` to using `PyQt5` for the UI, added a new settings window for configuration, a new continuous recording mode, support for a local API, and more! Please be patient as I work out any bugs that may have been introduced in the process. If you encounter any problems, please [open a new issue](https://github.com/savbell/whisper-writer/issues)!
 
 WhisperWriter is a small speech-to-text app that uses [OpenAI's Whisper model](https://openai.com/research/whisper) to auto-transcribe recordings from a user's microphone to the active window.
