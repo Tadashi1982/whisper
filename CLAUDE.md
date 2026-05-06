@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WhisperWriter — app de speech-to-text que grava do microfone com um atalho global, transcreve via `faster-whisper` (local, na GPU) e digita o resultado na janela ativa. Fork customizado para rodar em Linux x86_64 com Python 3.12 e GPU NVIDIA. Testado em Ubuntu 24.04 / X11 / RTX 4070.
 
-Documentação detalhada do build/install em `docs/build-e-instalacao.md` — leia antes de mexer em empacotamento ou ambiente.
+Documentação detalhada do build/install em `docs/build-e-instalacao.md` — leia antes de mexer em empacotamento ou ambiente. Itens deferidos da revisão técnica (refator arquitetural, Wayland, testes) estão em `docs/pendencias.md` — consulte antes de reabrir um desses tópicos.
 
 ## Comandos comuns
 
@@ -22,7 +22,7 @@ uv pip install -r requirements.txt
 ruff check src/ run.py            # verifica
 ruff check src/ run.py --fix      # corrige auto-fixáveis
 
-# Build do executável standalone (~2,9 GB, gera dist/WhisperWriter/)
+# Build do executável standalone (~3 GB, gera dist/WhisperWriter/)
 pyinstaller WhisperWriter.spec --noconfirm
 
 # Instalar em ~/.local/share/WhisperWriter/ + atalho .desktop no menu GNOME
@@ -50,19 +50,25 @@ Quando o usuário aperta o atalho (`F9` por padrão):
 
 ### Pontos de extensibilidade com múltiplos backends
 
-- **`src/key_listener.py`** — abstração `InputBackend` com implementações `EvdevBackend` e `PynputBackend`. `KeyListener` herda de `QObject` e expõe `activated`/`deactivated` como `pyqtSignal` — emissão da thread do backend cruza pra main thread Qt via `QueuedConnection` automática. `EvdevBackend.is_available()` agora valida permissão de fato em `/dev/input/event*` (abre e fecha um device), então `auto` não vai mais falhar silenciosamente quando o user não está no grupo `input`. Em Linux X11 o backend selecionado continua sendo `PynputBackend`.
-- **`src/input_simulation.py`** — métodos: `pynput`, `clipboard`, `xdotool`, `ydotool`, `dotool`. Em Linux X11 use `xdotool` (digitação real via XTest, robusta em terminais embedded como o do VS Code). `pynput` perde caracteres em terminais. `clipboard` falha em terminais (eles usam Ctrl+Shift+V, não Ctrl+V).
+- **`src/key_listener.py`** — abstração `InputBackend` com implementações `EvdevBackend` e `PynputBackend`. `KeyListener` herda de `QObject` e expõe `activated`/`deactivated` como PySide6 `Signal` — emissão da thread do backend cruza pra main thread Qt via `QueuedConnection` automática (elimina race em F9 duplo). `EvdevBackend.is_available()` valida permissão de fato em `/dev/input/event*` (abre e fecha um device), então `auto` não vai mais falhar silenciosamente quando o user não está no grupo `input`. Em Linux X11 o backend selecionado continua sendo `PynputBackend`.
+- **`src/input_simulation.py`** — métodos: `pynput`, `clipboard`, `xdotool`, `ydotool`, `dotool`. Em Linux X11 use `xdotool` (digitação real via XTest, robusta em terminais embedded como o do VS Code). `pynput` perde caracteres em terminais. `clipboard` falha em terminais (eles usam Ctrl+Shift+V, não Ctrl+V). `InputSimulator` é `QObject` com sinal `finished`; `typewrite()` é assíncrono via `_TypingWorker(QThread)` para não congelar o event loop em frases longas com `writing_key_press_delay` alto. **Cuidado PySide6**: o worker NÃO usa `deleteLater` (o shiboken obedece de imediato e a referência Python fica apontando pra C++ destruído); em vez disso, o sinal `finished` é conectado a `_clear_worker` que zera `self._worker = None` para Python GC coletar.
 
 ### Configuração e paths
 
 - **Schema** (read-only): `src/config_schema.yaml` — fonte de verdade dos campos válidos com defaults.
 - **Config do usuário** (writable): `~/.config/WhisperWriter/config.yaml`. Lido por `src/utils.py:ConfigManager`. Salvo no menu Settings do app.
+- **Validação na carga** — `ConfigManager.load_user_config()` valida cada chave contra o schema (tipo declarado e `options`). Chave desconhecida, tipo errado ou valor fora das options → warning no stdout + mantém default. Implementado por `_validated_update` + `_coerce`.
 - **`src/config.yaml`** existe na pasta como artefato legado da migração — **ignorado**, não confiar nele.
 - **`src/paths.py`** abstrai dois casos:
   - `resource_path('assets/...')` → resolve para repo em dev, `sys._MEIPASS` no bundle PyInstaller
   - `user_config_path()` → sempre `~/.config/WhisperWriter/config.yaml`
 
 Sempre use esses helpers em vez de paths relativos crus, senão o bundle PyInstaller quebra.
+
+### Lifecycle e shutdown
+
+- **Cleanup graceful** roda via `QApplication.aboutToQuit` conectado a `WhisperWriterApp.cleanup()` (para `result_thread`, `key_listener.stop()`, `input_simulator.cleanup()`). Disparado quando o usuário escolhe "Exit" no tray (`exit_app` → `QApplication.quit()`).
+- **Ctrl+C / SIGINT / SIGTERM** caem no handler default do kernel (`SIG_DFL`) — mata o processo direto. **Não tente interceptar com `signal.signal(SIGINT, custom_handler)`**: em Qt + Python o event loop bloqueia em `select()` C e o handler nunca roda; tentei `set_wakeup_fd + QSocketNotifier` e o sinal ainda não chegou no nosso ambiente. SIG_DFL resolve o "Ctrl+C trava". Threads filhas e descritores de áudio são liberados pelo OS quando o processo morre — sem vazamento prático.
 
 ### Empacotamento (PyInstaller)
 

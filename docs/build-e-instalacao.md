@@ -101,7 +101,7 @@ source .venv/bin/activate
 pyinstaller WhisperWriter.spec --noconfirm
 ```
 
-Saída: `dist/WhisperWriter/` (~2,9 GB no modo GPU). Tempo de build: ~1 minuto numa máquina razoável.
+Saída: `dist/WhisperWriter/` (~3 GB no modo GPU — cuDNN 9 é maior que cuDNN 8). Tempo de build: ~1 minuto numa máquina razoável.
 
 ### Instalação
 
@@ -119,7 +119,7 @@ Após isso, o app aparece no menu do GNOME (tecla Super → "WhisperWriter").
 
 ### Limpeza pós-instalação
 
-A pasta `dist/` (2,9 GB) e `build/` (~70 MB) são regeneráveis. Pode apagar:
+A pasta `dist/` (3 GB) e `build/` (~70 MB) são regeneráveis. Pode apagar:
 
 ```bash
 rm -rf dist build
@@ -238,9 +238,14 @@ O `webrtcvad` (v2.0.11) ainda usa `pkg_resources`, que foi removido do core do `
 
 `pynput` em alguns terminais (xterm.js do VS Code, principalmente) perde caracteres quando digita rápido. `xdotool type` usa a extensão XTest do X11, é nativo, e respeita o `--delay` de forma confiável. O custo é depender do binário `xdotool` instalado no sistema (uma única dependência apt leve).
 
+### Como encerrar o app
+
+- **Tray icon → Exit**: cleanup graceful (para `result_thread`, `key_listener`, `input_simulator`) via `QApplication.aboutToQuit`
+- **Ctrl+C** no terminal: mata o processo direto via `SIG_DFL`. Threads filhas e descritores de áudio são liberados pelo OS — sem vazamento prático mas sem cleanup graceful
+
 ### CPU-only build
 
-Se quiser empacotar sem GPU (~400 MB em vez de ~2,9 GB):
+Se quiser empacotar sem GPU (~400 MB em vez de ~3 GB):
 
 1. Remova do `requirements.txt`:
    - `nvidia-cublas-cu12`
