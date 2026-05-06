@@ -2,6 +2,16 @@
 .venv/
 venv/
 env/
+eval/.venv-eval/
+
+# Dados e resultados de benchmarks
+# Áudios e manifests com paths absolutos: locais
+eval/data/*
+!eval/data/user_sample/
+eval/data/user_sample/*
+!eval/data/user_sample/reference.txt
+# JSONLs de hipóteses + relatórios: versionados (úteis para reprodutibilidade)
+eval/results/*.tmp
 
 # PyInstaller — regeneráveis
 build/

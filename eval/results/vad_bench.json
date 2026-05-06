@@ -1,0 +1,48 @@
+{
+  "webrtcvad_30ms": {
+    "silence": {
+      "latency": {
+        "mean_ms": 0.0025,
+        "median_ms": 0.0022,
+        "p95_ms": 0.0029,
+        "max_ms": 0.0216,
+        "n": 1000
+      },
+      "speech_detected_pct": 0.0
+    },
+    "speech": {
+      "latency": {
+        "mean_ms": 0.0028,
+        "median_ms": 0.0028,
+        "p95_ms": 0.003,
+        "max_ms": 0.0077,
+        "n": 1000
+      },
+      "speech_detected_pct": 100.0
+    }
+  },
+  "ten_vad_10ms": {
+    "silence": {
+      "latency": {
+        "mean_ms": 0.0478,
+        "median_ms": 0.0708,
+        "p95_ms": 0.0794,
+        "max_ms": 0.2378,
+        "n": 3000
+      },
+      "speech_detected_pct": -0.03,
+      "mean_prob": 0.102
+    },
+    "speech": {
+      "latency": {
+        "mean_ms": 0.0508,
+        "median_ms": 0.0758,
+        "p95_ms": 0.0859,
+        "max_ms": 0.2026,
+        "n": 3000
+      },
+      "speech_detected_pct": 0.1,
+      "mean_prob": 0.2578
+    }
+  }
+}
