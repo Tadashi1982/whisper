@@ -58,6 +58,7 @@ class WhisperWriterApp(QObject):
         Initialize the components of the application.
         """
         self.input_simulator = InputSimulator()
+        self.input_simulator.finished.connect(self.on_typing_finished)
 
         self.key_listener = KeyListener()
         self.key_listener.add_callback("on_activate", self.on_activation)
@@ -179,10 +180,17 @@ class WhisperWriterApp(QObject):
 
     def on_transcription_complete(self, result):
         """
-        When the transcription is complete, type the result and start listening for the activation key again.
+        Kick off async typing of the transcription. Post-typing actions
+        run via ``on_typing_finished`` so the Qt event loop stays responsive
+        while ``xdotool`` / ``pynput`` are sending keystrokes.
         """
+        if not result:
+            self.on_typing_finished()
+            return
         self.input_simulator.typewrite(result)
 
+    def on_typing_finished(self):
+        """Runs on the main Qt thread after the typing worker completes."""
         if ConfigManager.get_config_value('misc', 'noise_on_completion'):
             play_sound(resource_path(os.path.join('assets', 'beep.wav')))
 

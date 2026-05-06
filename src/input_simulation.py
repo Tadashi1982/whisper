@@ -6,6 +6,7 @@ import time
 import pyperclip
 from pynput.keyboard import Controller as PynputController
 from pynput.keyboard import Key as PynputKey
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
 from utils import ConfigManager
 
@@ -23,17 +24,42 @@ def run_command_or_exit_on_failure(command):
         print(f"Error running command: {e}")
         exit(1)
 
-class InputSimulator:
+
+class _TypingWorker(QThread):
+    """Background QThread that runs the actual blocking typewrite call.
+
+    Lives long enough for the simulator to capture its ``finished`` signal,
+    then deletes itself via ``deleteLater``.
+    """
+
+    def __init__(self, simulator, text):
+        super().__init__()
+        self._simulator = simulator
+        self._text = text
+
+    def run(self):
+        self._simulator._typewrite_sync(self._text)
+
+
+class InputSimulator(QObject):
     """
     A class to simulate keyboard input using various methods.
+
+    ``typewrite`` is asynchronous: it starts a worker thread and returns
+    immediately. Listeners should connect to the ``finished`` signal to
+    sequence post-typing actions.
     """
+
+    finished = pyqtSignal()
 
     def __init__(self):
         """
         Initialize the InputSimulator with the specified configuration.
         """
+        super().__init__()
         self.input_method = ConfigManager.get_config_value('post_processing', 'input_method')
         self.dotool_process = None
+        self._worker = None
 
         if self.input_method == 'pynput':
             self.keyboard = PynputController()
@@ -60,12 +86,20 @@ class InputSimulator:
             self.dotool_process = None
 
     def typewrite(self, text):
-        """
-        Simulate typing the given text with the specified interval between keystrokes.
+        """Start typing ``text`` asynchronously on a worker QThread.
 
-        Args:
-            text (str): The text to type.
+        Returns immediately; emits ``finished`` when the typing completes.
         """
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.wait()
+        worker = _TypingWorker(self, text)
+        worker.finished.connect(self.finished.emit)
+        worker.finished.connect(worker.deleteLater)
+        self._worker = worker
+        worker.start()
+
+    def _typewrite_sync(self, text):
+        """Run the configured typing backend on the calling thread (blocking)."""
         interval = ConfigManager.get_config_value('post_processing', 'writing_key_press_delay')
         if self.input_method == 'pynput':
             self._typewrite_pynput(text, interval)
