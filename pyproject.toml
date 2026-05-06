@@ -1,0 +1,28 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "hooks",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",  # line-too-long (handled by formatter when desired)
+    "E741",  # ambiguous variable name (KeyCode enum members like 'I', 'O', 'l')
+    "B008",  # function call in default argument
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/key_listener.py" = ["E741"]  # KeyCode.I, KeyCode.O are enum names

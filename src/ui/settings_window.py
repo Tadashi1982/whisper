@@ -1,11 +1,25 @@
 import os
 import sys
-from dotenv import set_key, load_dotenv
+
+from dotenv import load_dotenv, set_key
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
-    QApplication, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QCheckBox,
-    QMessageBox, QTabWidget, QWidget, QSizePolicy, QSpacerItem, QToolButton, QStyle, QFileDialog
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QSpacerItem,
+    QStyle,
+    QTabWidget,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, QCoreApplication, QProcess, pyqtSignal
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from ui.base_window import BaseWindow
@@ -91,10 +105,10 @@ class SettingsWindow(BaseWindow):
         widget_name = f"{category}_{sub_category}_{key}_input" if sub_category else f"{category}_{key}_input"
         label_name = f"{category}_{sub_category}_{key}_label" if sub_category else f"{category}_{key}_label"
         help_name = f"{category}_{sub_category}_{key}_help" if sub_category else f"{category}_{key}_help"
-        
+
         label.setObjectName(label_name)
         help_button.setObjectName(help_name)
-        
+
         if isinstance(widget, QWidget):
             widget.setObjectName(widget_name)
         else:
@@ -256,11 +270,11 @@ class SettingsWindow(BaseWindow):
     def toggle_widget_visibility(self, widget, category, sub_category, key, use_api):
         if sub_category in ['api', 'local']:
             widget.setVisible(use_api if sub_category == 'api' else not use_api)
-            
+
             # Also toggle visibility of the corresponding label and help button
             label = self.findChild(QLabel, f"{category}_{sub_category}_{key}_label")
             help_button = self.findChild(QToolButton, f"{category}_{sub_category}_{key}_help")
-            
+
             if label:
                 label.setVisible(use_api if sub_category == 'api' else not use_api)
             if help_button:

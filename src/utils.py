@@ -1,5 +1,7 @@
-import yaml
 import os
+
+import yaml
+
 
 class ConfigManager:
     _instance = None
@@ -75,7 +77,7 @@ class ConfigManager:
             base_dir = os.path.dirname(os.path.abspath(__file__))
             schema_path = os.path.join(base_dir, 'config_schema.yaml')
 
-        with open(schema_path, 'r') as file:
+        with open(schema_path) as file:
             schema = yaml.safe_load(file)
         return schema
 
@@ -95,10 +97,11 @@ class ConfigManager:
         return config
 
     def load_user_config(self, config_path=None):
+        """Load user configuration and merge with default config."""
         from paths import user_config_path
         if config_path is None:
             config_path = user_config_path()
-        """Load user configuration and merge with default config."""
+
         def deep_update(source, overrides):
             for key, value in overrides.items():
                 if isinstance(value, dict) and key in source:
@@ -108,7 +111,7 @@ class ConfigManager:
 
         if config_path and os.path.isfile(config_path):
             try:
-                with open(config_path, 'r') as file:
+                with open(config_path) as file:
                     user_config = yaml.safe_load(file)
                     deep_update(self.config, user_config)
             except yaml.YAMLError:

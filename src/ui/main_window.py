@@ -1,11 +1,13 @@
 import os
 import sys
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QApplication, QPushButton, QHBoxLayout
+
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QApplication, QHBoxLayout, QPushButton
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from ui.base_window import BaseWindow
+
 
 class MainWindow(BaseWindow):
     openSettings = pyqtSignal()

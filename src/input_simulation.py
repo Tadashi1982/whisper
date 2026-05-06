@@ -1,11 +1,14 @@
-import subprocess
 import os
 import signal
+import subprocess
 import time
+
 import pyperclip
-from pynput.keyboard import Controller as PynputController, Key as PynputKey
+from pynput.keyboard import Controller as PynputController
+from pynput.keyboard import Key as PynputKey
 
 from utils import ConfigManager
+
 
 def run_command_or_exit_on_failure(command):
     """
@@ -76,9 +79,13 @@ class InputSimulator:
             self._typewrite_dotool(text, interval)
 
     def _typewrite_xdotool(self, text, interval):
-        delay_ms = max(0, int(interval * 1000))
+        try:
+            delay_ms = max(1, int(float(interval) * 1000))
+        except (TypeError, ValueError):
+            delay_ms = 12
+        safe_text = text.replace('\x00', '')
         subprocess.run(
-            ['xdotool', 'type', '--clearmodifiers', '--delay', str(delay_ms), '--', text],
+            ['xdotool', 'type', '--clearmodifiers', '--delay', str(delay_ms), '--', safe_text],
             check=False,
         )
 

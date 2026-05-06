@@ -20,11 +20,13 @@ else:
 src_dir = os.path.join(base_dir, 'src')
 sys.path.insert(0, src_dir)
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
+
 load_dotenv()
 
 print('Starting WhisperWriter...')
 
-from main import WhisperWriterApp
+from main import WhisperWriterApp  # noqa: E402
+
 app = WhisperWriterApp()
 app.run()

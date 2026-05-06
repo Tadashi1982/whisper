@@ -27,20 +27,28 @@ Driver NVIDIA já instalado (verifique com `nvidia-smi`). **Não é necessário 
 
 ## Setup do ambiente de desenvolvimento
 
-A partir da raiz do projeto:
+A partir da raiz do projeto. Recomendado: usar **[`uv`](https://github.com/astral-sh/uv)** (10–100x mais rápido que `pip`); fallback para `pip` puro está documentado abaixo.
 
 ```bash
+# Recomendado — uv (instale uma vez: curl -LsSf https://astral.sh/uv/install.sh | sh)
+uv venv -p 3.12 .venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+```bash
+# Alternativa — pip puro
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-O `requirements.txt` já está calibrado para Python 3.12 (`numpy 1.26+`, `numba 0.59+`, `av 12+`, `aiohttp 3.9+`, etc.) e inclui as libs CUDA pip (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12`).
+O `requirements.txt` já está calibrado para Python 3.12 (`numpy 1.26+`, `numba 0.59+`, `av 12+`, `aiohttp 3.9+`, etc.) e inclui as libs CUDA pip (`nvidia-cublas-cu12`, `nvidia-cudnn-cu12 ≥ 9.1`, `ctranslate2 ≥ 4.5`).
 
 ### Hook do `LD_LIBRARY_PATH` no `activate`
 
-O arquivo `.venv/bin/activate` está **patchado** para exportar `LD_LIBRARY_PATH` apontando para as libs CUDA empacotadas pelos pacotes `nvidia-*`. Sem isso, o `ctranslate2` não encontra `libcudnn.so.8` em runtime.
+O arquivo `.venv/bin/activate` está **patchado** para exportar `LD_LIBRARY_PATH` apontando para as libs CUDA empacotadas pelos pacotes `nvidia-*`. Sem isso, o `ctranslate2` não encontra `libcudnn.so.9` em runtime.
 
 O patch adiciona estes paths ao `LD_LIBRARY_PATH` quando você roda `source .venv/bin/activate`:
 
@@ -61,7 +69,16 @@ source .venv/bin/activate
 python run.py
 ```
 
-A primeira execução baixa o modelo `large-v3` (~3 GB) do HuggingFace para `~/.cache/huggingface/`.
+A primeira execução baixa o modelo `large-v3-turbo` (~1.6 GB) do HuggingFace para `~/.cache/huggingface/`.
+
+### Linting (ruff)
+
+O projeto usa `ruff` (configurado em `pyproject.toml`) para checagem estática:
+
+```bash
+ruff check src/ run.py        # verifica
+ruff check src/ run.py --fix  # corrige o que for auto-fixable
+```
 
 ---
 
@@ -131,7 +148,7 @@ rm -rf dist build
 ~/.config/WhisperWriter/
 └── config.yaml                         # configurações persistentes do usuário
 
-~/.cache/huggingface/                   # modelos baixados (large-v3 ≈ 3 GB)
+~/.cache/huggingface/                   # modelos baixados (large-v3-turbo ≈ 1.6 GB)
 ```
 
 ---
@@ -157,10 +174,10 @@ rm -rf ~/.local/share/WhisperWriter \
        ~/.config/WhisperWriter
 ```
 
-Para liberar também o cache do modelo (~3 GB):
+Para liberar também o cache do modelo (~1.6 GB):
 
 ```bash
-rm -rf ~/.cache/huggingface/hub/models--Systran--faster-whisper-large-v3
+rm -rf ~/.cache/huggingface/hub/models--Systran--faster-whisper-large-v3-turbo
 ```
 
 ---
@@ -171,10 +188,9 @@ Se precisar recriar o `.venv` (ex: bumpou Python, mudou requirements drasticamen
 
 ```bash
 rm -rf .venv
-python3.12 -m venv .venv
+uv venv -p 3.12 .venv          # ou: python3.12 -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+uv pip install -r requirements.txt   # ou: pip install -r requirements.txt
 ```
 
 Depois **reaplique o patch do `LD_LIBRARY_PATH`** no `.venv/bin/activate`. Em resumo, adicione:

@@ -1,12 +1,14 @@
-import sys
 import os
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QTimer
-from PyQt5.QtGui import QFont, QPixmap, QIcon
-from PyQt5.QtWidgets import QApplication, QLabel, QHBoxLayout
+import sys
+
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from ui.base_window import BaseWindow
 from paths import resource_path
+from ui.base_window import BaseWindow
+
 
 class StatusWindow(BaseWindow):
     statusSignal = pyqtSignal(str)
@@ -25,7 +27,7 @@ class StatusWindow(BaseWindow):
         Initialize the status user interface.
         """
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        
+
         status_layout = QHBoxLayout()
         status_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -47,7 +49,7 @@ class StatusWindow(BaseWindow):
         status_layout.addStretch(1)
 
         self.main_layout.addLayout(status_layout)
-        
+
     def show(self):
         """
         Position the window in the bottom center of the screen and show it.
@@ -64,7 +66,7 @@ class StatusWindow(BaseWindow):
 
         self.move(x, y)
         super().show()
-        
+
     def closeEvent(self, event):
         """
         Emit the close signal when the window is closed.
@@ -91,12 +93,12 @@ class StatusWindow(BaseWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    
+
     status_window = StatusWindow()
     status_window.show()
 
     # Simulate status updates
     QTimer.singleShot(3000, lambda: status_window.statusSignal.emit('transcribing'))
     QTimer.singleShot(6000, lambda: status_window.statusSignal.emit('idle'))
-    
+
     sys.exit(app.exec_())

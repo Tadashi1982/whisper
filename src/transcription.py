@@ -1,11 +1,13 @@
 import io
 import os
+
 import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
 from openai import OpenAI
 
 from utils import ConfigManager
+
 
 def create_local_model():
     """
@@ -35,11 +37,11 @@ def create_local_model():
                                  compute_type=compute_type)
     except Exception as e:
         ConfigManager.console_print(f'Error initializing WhisperModel: {e}')
-        ConfigManager.console_print('Falling back to CPU.')
+        ConfigManager.console_print('Falling back to CPU with int8 compute type.')
         model = WhisperModel(model_path or local_model_options['model'],
                              device='cpu',
-                             compute_type=compute_type,
-                             download_root=None if model_path else None)
+                             compute_type='int8',
+                             download_root=None)
 
     ConfigManager.console_print('Local model created.')
     return model

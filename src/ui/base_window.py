@@ -1,6 +1,6 @@
-from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPainter, QBrush, QColor, QFont, QPainterPath, QGuiApplication
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QMainWindow
+from PyQt5.QtCore import QRectF, Qt
+from PyQt5.QtGui import QBrush, QColor, QFont, QGuiApplication, QPainter, QPainterPath
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
 
 
 class BaseWindow(QMainWindow):
@@ -42,7 +42,7 @@ class BaseWindow(QMainWindow):
         close_button_layout = QHBoxLayout(close_button_widget)
         close_button_layout.setContentsMargins(0, 0, 0, 0)
 
-        close_button = QPushButton('×')
+        close_button = QPushButton('×')  # noqa: RUF001
         close_button.setFixedSize(25, 25)
         close_button.setStyleSheet("""
             QPushButton {

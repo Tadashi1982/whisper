@@ -38,7 +38,7 @@ model_options:
   # Configuration options for the faster-whisper model
   local:
     model:
-      value: base
+      value: large-v3-turbo
       type: str
       description: "The model to use for transcription. The larger models provide better accuracy but are slower."
       options:
@@ -54,6 +54,7 @@ model_options:
         - large-v1
         - large-v2
         - large-v3
+        - large-v3-turbo
     device:
       value: auto
       type: str

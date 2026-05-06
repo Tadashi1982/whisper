@@ -1,13 +1,11 @@
+import queue
 import time
 import traceback
+
 import numpy as np
 import sounddevice as sd
-import tempfile
-import wave
 import webrtcvad
-from PyQt5.QtCore import QThread, QMutex, pyqtSignal
-from collections import deque
-from threading import Event
+from PyQt5.QtCore import QMutex, QThread, pyqtSignal
 
 from transcription import transcribe
 from utils import ConfigManager
@@ -97,7 +95,7 @@ class ResultThread(QThread):
             self.statusSignal.emit('idle')
             self.resultSignal.emit(result)
 
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             self.statusSignal.emit('error')
             self.resultSignal.emit('')
@@ -128,33 +126,29 @@ class ResultThread(QThread):
             speech_detected = False
             silent_frame_count = 0
 
-        audio_buffer = deque(maxlen=frame_size)
+        audio_queue: queue.Queue = queue.Queue()
         recording = []
-
-        data_ready = Event()
 
         def audio_callback(indata, frames, time, status):
             if status:
                 ConfigManager.console_print(f"Audio callback status: {status}")
-            audio_buffer.extend(indata[:, 0])
-            data_ready.set()
+            audio_queue.put(indata[:, 0].copy())
 
         with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype='int16',
                             blocksize=frame_size, device=recording_options.get('sound_device'),
                             callback=audio_callback):
             while self.is_running and self.is_recording:
-                data_ready.wait()
-                data_ready.clear()
-
-                if len(audio_buffer) < frame_size:
+                try:
+                    chunk = audio_queue.get(timeout=0.1)
+                except queue.Empty:
                     continue
 
-                # Save frame
-                frame = np.array(list(audio_buffer), dtype=np.int16)
-                audio_buffer.clear()
+                if len(chunk) < frame_size:
+                    continue
+
+                frame = np.asarray(chunk[:frame_size], dtype=np.int16)
                 recording.extend(frame)
 
-                # Avoid trying to detect voice in initial frames
                 if initial_frames_to_skip > 0:
                     initial_frames_to_skip -= 1
                     continue
@@ -179,7 +173,7 @@ class ResultThread(QThread):
         min_duration_ms = recording_options.get('min_duration') or 100
 
         if (duration * 1000) < min_duration_ms:
-            ConfigManager.console_print(f'Discarded due to being too short.')
+            ConfigManager.console_print('Discarded due to being too short.')
             return None
 
         return audio_data

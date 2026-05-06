@@ -15,6 +15,13 @@ Documentação detalhada do build/install em `docs/build-e-instalacao.md` — le
 source .venv/bin/activate
 python run.py
 
+# Instalar deps (uv recomendado; pip funciona também)
+uv pip install -r requirements.txt
+
+# Linting
+ruff check src/ run.py            # verifica
+ruff check src/ run.py --fix      # corrige auto-fixáveis
+
 # Build do executável standalone (~2,9 GB, gera dist/WhisperWriter/)
 pyinstaller WhisperWriter.spec --noconfirm
 
@@ -43,7 +50,7 @@ Quando o usuário aperta o atalho (`F9` por padrão):
 
 ### Pontos de extensibilidade com múltiplos backends
 
-- **`src/key_listener.py`** — abstração `InputBackend` com implementações `EvdevBackend` e `PynputBackend`. **`auto` é uma armadilha**: `EvdevBackend.is_available()` só checa se a lib Python existe, não checa permissão em `/dev/input/event*`. Se o usuário não está no grupo `input`, `evdev` falha silenciosamente. Mantenha `input_backend: pynput` em config no Linux X11.
+- **`src/key_listener.py`** — abstração `InputBackend` com implementações `EvdevBackend` e `PynputBackend`. `KeyListener` herda de `QObject` e expõe `activated`/`deactivated` como `pyqtSignal` — emissão da thread do backend cruza pra main thread Qt via `QueuedConnection` automática. `EvdevBackend.is_available()` agora valida permissão de fato em `/dev/input/event*` (abre e fecha um device), então `auto` não vai mais falhar silenciosamente quando o user não está no grupo `input`. Em Linux X11 o backend selecionado continua sendo `PynputBackend`.
 - **`src/input_simulation.py`** — métodos: `pynput`, `clipboard`, `xdotool`, `ydotool`, `dotool`. Em Linux X11 use `xdotool` (digitação real via XTest, robusta em terminais embedded como o do VS Code). `pynput` perde caracteres em terminais. `clipboard` falha em terminais (eles usam Ctrl+Shift+V, não Ctrl+V).
 
 ### Configuração e paths
@@ -61,7 +68,7 @@ Sempre use esses helpers em vez de paths relativos crus, senão o bundle PyInsta
 
 - **`WhisperWriter.spec`** — entrypoint `run.py`, modo `onedir`, inclui libs CUDA dos pacotes pip `nvidia-cublas-cu12` e `nvidia-cudnn-cu12` no destino `nvidia/cublas/lib`, `nvidia/cudnn/lib`, `nvidia/cuda_nvrtc/lib`.
 - **`hooks/hook-webrtcvad.py`** — hook custom obrigatório. O hook padrão do `pyinstaller-hooks-contrib` faz `copy_metadata('webrtcvad')` que falha porque o pacote distribuído chama-se `webrtcvad-wheels`. Não remova.
-- **`run.py` em modo `sys.frozen`** — exporta `LD_LIBRARY_PATH` apontando para `_internal/nvidia/*/lib` para o `ctranslate2` achar `libcudnn.so.8` em runtime.
+- **`run.py` em modo `sys.frozen`** — exporta `LD_LIBRARY_PATH` apontando para `_internal/nvidia/*/lib` para o `ctranslate2` achar `libcudnn.so.9` em runtime.
 
 ### Patch do venv para CUDA em modo dev
 
@@ -74,6 +81,8 @@ Sempre use esses helpers em vez de paths relativos crus, senão o bundle PyInsta
 - **`vad_parameters`** explícitos em `transcription.py` (`min_silence_duration_ms=500`, `speech_pad_ms=200`, `threshold=0.45`) — calibrados para não cortar começo/fim de palavras. O VAD default é agressivo demais.
 - **Wayland** — `pynput` não captura hotkey global em Wayland nem digita em outras janelas. O setup atual assume X11 (verifique com `echo $XDG_SESSION_TYPE`). Para Wayland seria necessário trocar `input_method` para `ydotool` (e mexer no input_backend).
 - **Versões de pacotes em `requirements.txt`** — bumpadas vs upstream para Python 3.12: `numpy>=1.26`, `numba>=0.59`, `llvmlite>=0.42`, `av>=12`, `aiohttp>=3.9`, `Pillow>=10`, `cffi>=1.16`, `frozenlist>=1.4.1`, `MarkupSafe>=2.1.5`, `multidict>=6.0.5`, `onnxruntime>=1.17`, `tiktoken>=0.7`. Se reduzir alguma, vai bater em "no wheel for cp312" e tentar compilar do fonte.
+- **Stack faster-whisper / CUDA** — pinado em `ctranslate2>=4.5,<5`, `faster-whisper>=1.2`, `nvidia-cudnn-cu12>=9.1,<10`. Reduzir o cuDNN para 8.x quebra: o `ctranslate2 4.5+` linka contra `libcudnn.so.9`.
+- **Modelo padrão** — `large-v3-turbo` (~1.6 GB VRAM, ~5x mais rápido que `large-v3` com queda de WER de ~1%). Voltar para `large-v3` é seguro mas mais lento; está nas opções do schema.
 
 ## Dependências do sistema
 

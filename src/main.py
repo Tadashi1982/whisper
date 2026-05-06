@@ -1,29 +1,27 @@
 import os
 import sys
-import time
+
 import sounddevice as sd
 import soundfile as sf
-from pynput.keyboard import Controller
+from PyQt5.QtCore import QObject, QProcess
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QAction, QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
+from input_simulation import InputSimulator
+from key_listener import KeyListener
 from paths import resource_path
+from result_thread import ResultThread
+from transcription import create_local_model
+from ui.main_window import MainWindow
+from ui.settings_window import SettingsWindow
+from ui.status_window import StatusWindow
+from utils import ConfigManager
 
 
 def play_sound(path):
     data, samplerate = sf.read(path)
     sd.play(data, samplerate)
     sd.wait()
-from PyQt5.QtCore import QObject, QProcess
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QMessageBox
-
-from key_listener import KeyListener
-from result_thread import ResultThread
-from ui.main_window import MainWindow
-from ui.settings_window import SettingsWindow
-from ui.status_window import StatusWindow
-from transcription import create_local_model
-from input_simulation import InputSimulator
-from utils import ConfigManager
 
 
 class WhisperWriterApp(QObject):
@@ -34,6 +32,14 @@ class WhisperWriterApp(QObject):
         super().__init__()
         self.app = QApplication(sys.argv)
         self.app.setWindowIcon(QIcon(resource_path(os.path.join('assets', 'ww-logo.png'))))
+
+        self.key_listener = None
+        self.input_simulator = None
+        self.local_model = None
+        self.result_thread = None
+        self.main_window = None
+        self.status_window = None
+        self.tray_icon = None
 
         ConfigManager.initialize()
 
@@ -58,7 +64,6 @@ class WhisperWriterApp(QObject):
         self.key_listener.add_callback("on_deactivate", self.on_deactivation)
 
         model_options = ConfigManager.get_config_section('model_options')
-        model_path = model_options.get('local', {}).get('model_path')
         self.local_model = create_local_model() if not model_options.get('use_api') else None
 
         self.result_thread = None

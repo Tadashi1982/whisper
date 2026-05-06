@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from enum import Enum, auto
-from typing import Callable, Set
+
+from PyQt5.QtCore import QObject, pyqtSignal
 
 from utils import ConfigManager
 
@@ -247,10 +249,10 @@ class KeyChord:
     Represents a combination of keys that need to be pressed simultaneously.
     """
 
-    def __init__(self, keys: Set[KeyCode | frozenset[KeyCode]]):
+    def __init__(self, keys: set[KeyCode | frozenset[KeyCode]]):
         """Initialize the KeyChord."""
         self.keys = keys
-        self.pressed_keys: Set[KeyCode] = set()
+        self.pressed_keys: set[KeyCode] = set()
 
     def update(self, key: KeyCode, event_type: InputEvent) -> bool:
         """Update the state of pressed keys and check if the chord is active."""
@@ -271,20 +273,24 @@ class KeyChord:
                 return False
         return True
 
-class KeyListener:
+class KeyListener(QObject):
     """
     Manages input backends and listens for specific key combinations.
+
+    Exposes ``activated`` and ``deactivated`` as Qt signals so listeners
+    receive callbacks on the main Qt thread (via ``QueuedConnection``)
+    even though the input backend dispatches from a worker thread.
     """
+
+    activated = pyqtSignal()
+    deactivated = pyqtSignal()
 
     def __init__(self):
         """Initialize the KeyListener with backends and activation keys."""
+        super().__init__()
         self.backends = []
         self.active_backend = None
         self.key_chord = None
-        self.callbacks = {
-            "on_activate": [],
-            "on_deactivate": []
-        }
         self.load_activation_keys()
         self.initialize_backends()
         self.select_backend_from_config()
@@ -357,7 +363,7 @@ class KeyListener:
         keys = self.parse_key_combination(key_combination)
         self.set_activation_keys(keys)
 
-    def parse_key_combination(self, combination_string: str) -> Set[KeyCode | frozenset[KeyCode]]:
+    def parse_key_combination(self, combination_string: str) -> set[KeyCode | frozenset[KeyCode]]:
         """Parse a string representation of key combination into a set of KeyCodes."""
         keys = set()
         key_map = {
@@ -379,7 +385,7 @@ class KeyListener:
                     print(f"Unknown key: {key}")
         return keys
 
-    def set_activation_keys(self, keys: Set[KeyCode]):
+    def set_activation_keys(self, keys: set[KeyCode]):
         """Set the activation keys for the KeyChord."""
         self.key_chord = KeyChord(keys)
 
@@ -394,19 +400,21 @@ class KeyListener:
         is_active = self.key_chord.update(key, event_type)
 
         if not was_active and is_active:
-            self._trigger_callbacks("on_activate")
+            self.activated.emit()
         elif was_active and not is_active:
-            self._trigger_callbacks("on_deactivate")
+            self.deactivated.emit()
 
     def add_callback(self, event: str, callback: Callable):
-        """Add a callback function for a specific event."""
-        if event in self.callbacks:
-            self.callbacks[event].append(callback)
+        """Connect a callback to the corresponding Qt signal.
 
-    def _trigger_callbacks(self, event: str):
-        """Trigger all callbacks associated with a specific event."""
-        for callback in self.callbacks.get(event, []):
-            callback()
+        Kept for backwards compatibility with the previous callback-list API.
+        Connections use the default auto-connection, so callbacks fire on the
+        thread where ``KeyListener`` lives (main Qt thread).
+        """
+        if event == "on_activate":
+            self.activated.connect(callback)
+        elif event == "on_deactivate":
+            self.deactivated.connect(callback)
 
     def update_activation_keys(self):
         """Update activation keys from the current configuration."""
@@ -419,25 +427,31 @@ class EvdevBackend(InputBackend):
 
     @classmethod
     def is_available(cls) -> bool:
-        """Check if the evdev library is available."""
+        """Check if the evdev library is usable (lib installed and we have
+        permission to open at least one /dev/input/event* device)."""
         try:
             import evdev
+            devices = evdev.list_devices()
+            if not devices:
+                return False
+            evdev.InputDevice(devices[0]).close()
             return True
-        except ImportError:
+        except (ImportError, PermissionError, OSError):
             return False
 
     def __init__(self):
         """Initialize the EvdevBackend."""
-        self.devices: List[evdev.InputDevice] = []
-        self.key_map: Optional[dict] = None
+        self.devices = []
+        self.key_map = None
         self.evdev = None
-        self.thread: Optional[threading.Thread] = None
-        self.stop_event: Optional[threading.Event] = None
+        self.thread = None
+        self.stop_event = None
 
     def start(self):
         """Start the evdev backend."""
-        import evdev
         import threading
+
+        import evdev
         self.evdev = evdev
         self.key_map = self._create_key_map()
 
@@ -747,11 +761,8 @@ class PynputBackend(InputBackend):
     @classmethod
     def is_available(cls) -> bool:
         """Check if pynput library is available."""
-        try:
-            import pynput
-            return True
-        except ImportError:
-            return False
+        from importlib.util import find_spec
+        return find_spec('pynput') is not None
 
     def __init__(self):
         """Initialize PynputBackend."""
