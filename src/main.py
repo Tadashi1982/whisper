@@ -11,6 +11,7 @@ from input_simulation import InputSimulator
 from key_listener import KeyListener
 from paths import resource_path
 from result_thread import ResultThread
+from session import enforce_session_compatibility
 from transcription import create_local_model
 from ui.main_window import MainWindow
 from ui.settings_window import SettingsWindow
@@ -42,6 +43,7 @@ class WhisperWriterApp(QObject):
         self.tray_icon = None
 
         ConfigManager.initialize()
+        enforce_session_compatibility(ConfigManager)
 
         self.settings_window = SettingsWindow()
         self.settings_window.settings_closed.connect(self.on_settings_closed)
