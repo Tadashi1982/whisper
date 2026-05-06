@@ -1,9 +1,9 @@
 import os
 import sys
 
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QFont, QPixmap
-from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from paths import resource_path
@@ -11,8 +11,8 @@ from ui.base_window import BaseWindow
 
 
 class StatusWindow(BaseWindow):
-    statusSignal = pyqtSignal(str)
-    closeSignal = pyqtSignal()
+    statusSignal = Signal(str)
+    closeSignal = Signal()
 
     def __init__(self):
         """
@@ -74,7 +74,7 @@ class StatusWindow(BaseWindow):
         self.closeSignal.emit()
         super().closeEvent(event)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def updateStatus(self, status):
         """
         Update the status window based on the given status.
@@ -101,4 +101,4 @@ if __name__ == '__main__':
     QTimer.singleShot(3000, lambda: status_window.statusSignal.emit('transcribing'))
     QTimer.singleShot(6000, lambda: status_window.statusSignal.emit('idle'))
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

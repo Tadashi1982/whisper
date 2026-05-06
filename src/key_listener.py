@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from enum import Enum, auto
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 from utils import ConfigManager
 
@@ -282,8 +282,8 @@ class KeyListener(QObject):
     even though the input backend dispatches from a worker thread.
     """
 
-    activated = pyqtSignal()
-    deactivated = pyqtSignal()
+    activated = Signal()
+    deactivated = Signal()
 
     def __init__(self):
         """Initialize the KeyListener with backends and activation keys."""

@@ -6,7 +6,7 @@ import time
 import pyperclip
 from pynput.keyboard import Controller as PynputController
 from pynput.keyboard import Key as PynputKey
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PySide6.QtCore import QObject, QThread, Signal
 
 from utils import ConfigManager
 
@@ -50,7 +50,7 @@ class InputSimulator(QObject):
     sequence post-typing actions.
     """
 
-    finished = pyqtSignal()
+    finished = Signal()
 
     def __init__(self):
         """

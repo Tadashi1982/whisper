@@ -3,9 +3,9 @@ import sys
 
 import sounddevice as sd
 import soundfile as sf
-from PyQt5.QtCore import QObject, QProcess
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction, QApplication, QMenu, QMessageBox, QSystemTrayIcon
+from PySide6.QtCore import QObject, QProcess
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from input_simulation import InputSimulator
 from key_listener import KeyListener
@@ -205,7 +205,7 @@ class WhisperWriterApp(QObject):
         """
         Start the application.
         """
-        sys.exit(self.app.exec_())
+        sys.exit(self.app.exec())
 
 
 if __name__ == '__main__':

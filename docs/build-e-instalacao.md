@@ -140,7 +140,7 @@ rm -rf dist build
 
 ~/.local/share/WhisperWriter/           # APP INSTALADO
 ├── WhisperWriter                       # executável
-└── _internal/                          # libs (Python, CUDA, PyQt5, faster-whisper, etc.)
+└── _internal/                          # libs (Python, CUDA, PySide6, faster-whisper, etc.)
 
 ~/.local/share/applications/
 └── whisperwriter.desktop               # atalho do menu GNOME

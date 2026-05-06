@@ -38,7 +38,7 @@ Não há suíte de testes — o smoke test prático é `python run.py` + apertar
 
 ### Fluxo de runtime
 
-`run.py` → `src/main.py:WhisperWriterApp` → loop QApplication PyQt5 com tray icon.
+`run.py` → `src/main.py:WhisperWriterApp` → loop QApplication PySide6 (Qt6) com tray icon.
 
 Quando o usuário aperta o atalho (`F9` por padrão):
 
@@ -84,6 +84,7 @@ Sempre use esses helpers em vez de paths relativos crus, senão o bundle PyInsta
 - **Versões de pacotes em `requirements.txt`** — bumpadas vs upstream para Python 3.12: `numpy>=1.26`, `numba>=0.59`, `llvmlite>=0.42`, `av>=12`, `aiohttp>=3.9`, `Pillow>=10`, `cffi>=1.16`, `frozenlist>=1.4.1`, `MarkupSafe>=2.1.5`, `multidict>=6.0.5`, `onnxruntime>=1.17`, `tiktoken>=0.7`. Se reduzir alguma, vai bater em "no wheel for cp312" e tentar compilar do fonte.
 - **Stack faster-whisper / CUDA** — pinado em `ctranslate2>=4.5,<5`, `faster-whisper>=1.2`, `nvidia-cudnn-cu12>=9.1,<10`. Reduzir o cuDNN para 8.x quebra: o `ctranslate2 4.5+` linka contra `libcudnn.so.9`.
 - **Modelo padrão** — `large-v3-turbo` (~1.6 GB VRAM, ~5x mais rápido que `large-v3` com queda de WER de ~1%). Voltar para `large-v3` é seguro mas mais lento; está nas opções do schema.
+- **Qt** — usa PySide6 (Qt6, LGPL). Migração de PyQt5 feita na fase 7. Sinais usam `Signal`/`Slot` (não `pyqtSignal`/`pyqtSlot`); `QAction` vive em `PySide6.QtGui` (não `QtWidgets`); `app.exec()` (não `exec_()`). Qt6 também tem suporte Wayland melhor — relevante quando os itens #20/#21 da fase 6 forem implementados.
 
 ## Dependências do sistema
 

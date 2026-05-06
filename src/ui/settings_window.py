@@ -2,8 +2,8 @@ import os
 import sys
 
 from dotenv import load_dotenv, set_key
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -28,8 +28,8 @@ from utils import ConfigManager
 load_dotenv()
 
 class SettingsWindow(BaseWindow):
-    settings_closed = pyqtSignal()
-    settings_saved = pyqtSignal()
+    settings_closed = Signal()
+    settings_saved = Signal()
 
     def __init__(self):
         """Initialize the settings window."""

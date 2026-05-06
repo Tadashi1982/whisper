@@ -5,7 +5,7 @@ import traceback
 import numpy as np
 import sounddevice as sd
 import webrtcvad
-from PyQt5.QtCore import QMutex, QThread, pyqtSignal
+from PySide6.QtCore import QMutex, QThread, Signal
 
 from transcription import transcribe
 from utils import ConfigManager
@@ -27,8 +27,8 @@ class ResultThread(QThread):
         resultSignal: Emits the transcription result
     """
 
-    statusSignal = pyqtSignal(str)
-    resultSignal = pyqtSignal(str)
+    statusSignal = Signal(str)
+    resultSignal = Signal(str)
 
     def __init__(self, local_model=None):
         """
