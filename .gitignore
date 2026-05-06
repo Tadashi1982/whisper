@@ -1,0 +1,52 @@
+# Ambiente virtual (~3 GB com libs CUDA — nunca versionar)
+.venv/
+venv/
+env/
+
+# PyInstaller — regeneráveis
+build/
+dist/
+*.spec.bak
+
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Cache de modelos do HuggingFace (caso baixem pra cá em vez de ~/.cache/)
+.cache/
+models/
+
+# Config local do usuário (vive em ~/.config/WhisperWriter/, mas o legado fica aqui)
+src/config.yaml
+
+# Áudio/teste temporários
+*.wav
+!assets/*.wav
+teste.txt
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs e arquivos temporários
+*.log
+/tmp/
+/temp/
+
+# Bundles/arquivos baixados
+whisper-writer-main.zip
+*.tar.gz
+
+# Variáveis de ambiente / segredos
+.env
+.env.local
+*.pem
+*.key
